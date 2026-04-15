@@ -26,6 +26,13 @@ def test_derive_key_differs_with_different_salt():
     assert key1 != key2
 
 
+def test_derive_key_differs_with_different_password():
+    salt = generate_salt()
+    key1 = derive_key("password1", salt)
+    key2 = derive_key("password2", salt)
+    assert key1 != key2
+
+
 def test_encrypt_returns_bytes():
     result = encrypt("SECRET=abc123", "mypassword")
     assert isinstance(result, bytes)
@@ -55,6 +62,11 @@ def test_decrypt_corrupted_data_raises():
     corrupted = encrypted[:SALT_SIZE] + b"\x00" * (len(encrypted) - SALT_SIZE)
     with pytest.raises(ValueError, match="Decryption failed"):
         decrypt(corrupted, "password")
+
+
+def test_decrypt_empty_data_raises():
+    with pytest.raises((ValueError, Exception)):
+        decrypt(b"", "password")
 
 
 def test_two_encryptions_of_same_plaintext_differ():
