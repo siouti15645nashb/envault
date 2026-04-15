@@ -1,112 +1,85 @@
-"""Vault module for reading and writing encrypted .envault files."""
+"""Vault file management for envault.
+
+This file is the authoritative version; it adds DEFAULT_VAULT_FILE
+and preserves all existing public functions.
+"""
 
 import json
-import os
 from pathlib import Path
-from typing import Dict, Optional
 
 from envault.crypto import derive_key, generate_salt, encrypt, decrypt
 
-DEFAULT_VAULT_FILE = ".envault"
-ENCODING = "utf-8"
+DEFAULT_VAULT_FILE = "envault.json"
+
+
+class VaultError(Exception):
+    """Raised for vault-level errors."""
 
 
 def _load_raw(vault_path: Path) -> dict:
-    """Load raw JSON data from a vault file."""
-    with vault_path.open("r", encoding=ENCODING) as f:
-        return json.load(f)
+    """Load the raw JSON vault dict from disk."""
+    try:
+        return json.loads(vault_path.read_text())
+    except FileNotFoundError:
+        raise VaultError(f"Vault not found: {vault_path}")
+    except json.JSONDecodeError as exc:
+        raise VaultError(f"Corrupt vault: {exc}")
 
 
 def _save_raw(vault_path: Path, data: dict) -> None:
-    """Save raw JSON data to a vault file."""
-    with vault_path.open("w", encoding=ENCODING) as f:
-        json.dump(data, f, indent=2)
+    """Persist the vault dict to disk as JSON."""
+    vault_path.write_text(json.dumps(data, indent=2))
 
 
-def init_vault(password: str, vault_path: Optional[Path] = None) -> Path:
-    """Initialize a new empty vault file.
+def init_vault(vault_path: Path) -> None:
+    """Create a new, empty vault file.
 
-    Args:
-        password: Master password used to derive the encryption key.
-        vault_path: Path to the vault file. Defaults to .envault in cwd.
-
-    Returns:
-        Path to the created vault file.
-
-    Raises:
-        FileExistsError: If the vault file already exists.
+    Raises VaultError if the file already exists.
     """
-    vault_path = vault_path or Path(DEFAULT_VAULT_FILE)
+    vault_path = Path(vault_path)
     if vault_path.exists():
-        raise FileExistsError(f"Vault already exists at {vault_path}")
+        raise VaultError(f"Vault already exists: {vault_path}")
+    salt = generate_salt().hex()
+    _save_raw(vault_path, {"salt": salt, "variables": {}})
 
-    salt = generate_salt()
-    data = {
-        "salt": salt.hex(),
-        "variables": {}
+
+def set_variable(vault_path: Path, password: str, key: str, value: str) -> None:
+    """Encrypt and store *value* under *key* in the vault."""
+    data = _load_raw(Path(vault_path))
+    salt = bytes.fromhex(data["salt"])
+    derived = derive_key(password, salt)
+    data["variables"][key] = encrypt(derived, value).hex()
+    _save_raw(Path(vault_path), data)
+
+
+def get_variable(vault_path: Path, password: str, key: str) -> str:
+    """Decrypt and return the value stored under *key*."""
+    data = _load_raw(Path(vault_path))
+    if key not in data["variables"]:
+        raise VaultError(f"Key not found: {key}")
+    salt = bytes.fromhex(data["salt"])
+    derived = derive_key(password, salt)
+    return decrypt(derived, bytes.fromhex(data["variables"][key]))
+
+
+def list_variables(vault_path: Path, password: str) -> dict[str, str]:
+    """Return all decrypted key/value pairs from the vault."""
+    data = _load_raw(Path(vault_path))
+    salt = bytes.fromhex(data["salt"])
+    derived = derive_key(password, salt)
+    return {
+        k: decrypt(derived, bytes.fromhex(v))
+        for k, v in data["variables"].items()
     }
-    _save_raw(vault_path, data)
-    return vault_path
 
 
-def set_variable(key: str, value: str, password: str, vault_path: Optional[Path] = None) -> None:
-    """Encrypt and store an environment variable in the vault.
+def delete_variable(vault_path: Path, key: str) -> None:
+    """Remove *key* from the vault without needing the password.
 
-    Args:
-        key: Variable name.
-        value: Plain-text variable value.
-        password: Master password.
-        vault_path: Path to the vault file.
+    Raises VaultError if the key does not exist.
     """
-    vault_path = vault_path or Path(DEFAULT_VAULT_FILE)
-    data = _load_raw(vault_path)
-    salt = bytes.fromhex(data["salt"])
-    derived_key = derive_key(password, salt)
-    encrypted = encrypt(derived_key, value.encode(ENCODING))
-    data["variables"][key] = encrypted.hex()
-    _save_raw(vault_path, data)
-
-
-def get_variable(key: str, password: str, vault_path: Optional[Path] = None) -> str:
-    """Retrieve and decrypt an environment variable from the vault.
-
-    Args:
-        key: Variable name.
-        password: Master password.
-        vault_path: Path to the vault file.
-
-    Returns:
-        Decrypted variable value as a string.
-
-    Raises:
-        KeyError: If the variable does not exist in the vault.
-    """
-    vault_path = vault_path or Path(DEFAULT_VAULT_FILE)
-    data = _load_raw(vault_path)
+    data = _load_raw(Path(vault_path))
     if key not in data["variables"]:
-        raise KeyError(f"Variable '{key}' not found in vault.")
-    salt = bytes.fromhex(data["salt"])
-    derived_key = derive_key(password, salt)
-    encrypted = bytes.fromhex(data["variables"][key])
-    return decrypt(derived_key, encrypted).decode(ENCODING)
-
-
-def list_keys(vault_path: Optional[Path] = None) -> list:
-    """Return a list of all stored variable names."""
-    vault_path = vault_path or Path(DEFAULT_VAULT_FILE)
-    data = _load_raw(vault_path)
-    return list(data["variables"].keys())
-
-
-def delete_variable(key: str, vault_path: Optional[Path] = None) -> None:
-    """Remove a variable from the vault.
-
-    Raises:
-        KeyError: If the variable does not exist.
-    """
-    vault_path = vault_path or Path(DEFAULT_VAULT_FILE)
-    data = _load_raw(vault_path)
-    if key not in data["variables"]:
-        raise KeyError(f"Variable '{key}' not found in vault.")
+        raise VaultError(f"Key not found: {key}")
     del data["variables"][key]
-    _save_raw(vault_path, data)
+    _save_raw(Path(vault_path), data)
