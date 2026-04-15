@@ -1,108 +1,93 @@
-"""CLI entry point for envault."""
-
-import sys
-from pathlib import Path
+"""Main CLI entry point for envault."""
 
 import click
+from envault.vault import init_vault, set_variable, get_variable, list_variables
+from envault.cli_audit import audit_group
+from envault.cli_search import search_group
 
-from envault.vault import (
-    init_vault,
-    set_variable,
-    get_variable,
-    list_variables,
-    VaultExistsError,
-    VaultNotFoundError,
-)
-from envault.export import export_variables, SUPPORTED_FORMATS
-
-DEFAULT_VAULT = Path(".envault")
+DEFAULT_VAULT = ".envault"
 
 
 @click.group()
 def cli():
-    """envault — encrypted environment variable manager."""
+    """envault — encrypted project environment variable manager."""
 
 
-@cli.command("init")
-@click.password_option(prompt="Master password", help="Master password for the vault.")
-def cmd_init(password):
-    """Initialise a new vault in the current directory."""
+@cli.command(name="init")
+@click.option("--vault", default=DEFAULT_VAULT, show_default=True, help="Path to vault file.")
+@click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True, help="Master password.")
+def cmd_init(vault, password):
+    """Initialise a new vault."""
     try:
-        init_vault(DEFAULT_VAULT, password)
-        click.echo("Vault initialised successfully.")
-    except VaultExistsError:
+        init_vault(vault, password)
+        click.echo(f"Vault initialised at {vault}.")
+    except FileExistsError:
         click.echo("Error: vault already exists.", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
 
 
-@cli.command("set")
+@cli.command(name="set")
 @click.argument("key")
 @click.argument("value")
-@click.password_option(prompt="Master password", help="Master password for the vault.")
-def cmd_set(key, value, password):
-    """Store an encrypted variable in the vault."""
+@click.option("--vault", default=DEFAULT_VAULT, show_default=True, help="Path to vault file.")
+@click.option("--password", prompt=True, hide_input=True, help="Master password.")
+def cmd_set(key, value, vault, password):
+    """Set a variable in the vault."""
     try:
-        set_variable(DEFAULT_VAULT, password, key, value)
-        click.echo(f"Variable '{key}' stored.")
-    except VaultNotFoundError:
+        set_variable(vault, password, key, value)
+        click.echo(f"Set {key}.")
+    except FileNotFoundError:
         click.echo("Error: vault not found. Run 'envault init' first.", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
 
 
-@cli.command("get")
+@cli.command(name="get")
 @click.argument("key")
+@click.option("--vault", default=DEFAULT_VAULT, show_default=True, help="Path to vault file.")
 @click.option("--password", prompt=True, hide_input=True, help="Master password.")
-def cmd_get(key, password):
-    """Retrieve and print a variable from the vault."""
+def cmd_get(key, vault, password):
+    """Get a variable from the vault."""
     try:
-        value = get_variable(DEFAULT_VAULT, password, key)
+        value = get_variable(vault, password, key)
         click.echo(value)
-    except VaultNotFoundError:
+    except FileNotFoundError:
         click.echo("Error: vault not found.", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
     except KeyError:
-        click.echo(f"Error: key '{key}' not found.", err=True)
-        sys.exit(1)
+        click.echo(f"Error: variable '{key}' not found.", err=True)
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
 
 
-@cli.command("list")
+@cli.command(name="list")
+@click.option("--vault", default=DEFAULT_VAULT, show_default=True, help="Path to vault file.")
 @click.option("--password", prompt=True, hide_input=True, help="Master password.")
-def cmd_list(password):
-    """List all variable names stored in the vault."""
+def cmd_list(vault, password):
+    """List all variables in the vault."""
     try:
-        keys = list_variables(DEFAULT_VAULT, password)
-        if not keys:
-            click.echo("No variables stored.")
-        else:
-            for key in keys:
-                click.echo(key)
-    except VaultNotFoundError:
+        variables = list_variables(vault, password)
+    except FileNotFoundError:
         click.echo("Error: vault not found.", err=True)
-        sys.exit(1)
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    if not variables:
+        click.echo("No variables stored.")
+        return
+
+    for key in sorted(variables):
+        click.echo(key)
 
 
-@cli.command("export")
-@click.option(
-    "--format", "fmt",
-    default="dotenv",
-    show_default=True,
-    type=click.Choice(SUPPORTED_FORMATS),
-    help="Output format.",
-)
-@click.option("--password", prompt=True, hide_input=True, help="Master password.")
-@click.option("--key", "keys", multiple=True, help="Specific keys to export (repeatable).")
-def cmd_export(fmt, password, keys):
-    """Export vault variables to stdout in the chosen format."""
-    try:
-        selected = list(keys) if keys else None
-        output = export_variables(DEFAULT_VAULT, password, fmt=fmt, keys=selected)
-        click.echo(output)
-    except VaultNotFoundError:
-        click.echo("Error: vault not found.", err=True)
-        sys.exit(1)
-    except ValueError as exc:
-        click.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
+cli.add_command(audit_group)
+cli.add_command(search_group)
 
 
 if __name__ == "__main__":
