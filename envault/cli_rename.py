@@ -39,10 +39,11 @@ def cmd_rename_mv(old_key, new_key, vault, password, force):
 @click.argument("dst_key")
 @click.option("--vault", default=DEFAULT_VAULT, show_default=True, help="Path to vault file.")
 @click.option("--password", prompt=True, hide_input=True, help="Vault password.")
-def cmd_rename_cp(src_key, dst_key, vault, password):
+@click.option("--force", is_flag=True, default=False, help="Overwrite dst_key if it exists.")
+def cmd_rename_cp(src_key, dst_key, vault, password, force):
     """Copy SRC_KEY to DST_KEY in the vault."""
     try:
-        copy_variable(vault, password, src_key, dst_key)
+        copy_variable(vault, password, src_key, dst_key, force=force)
         click.echo(f"Copied '{src_key}' to '{dst_key}'.")
     except RenameError as e:
         click.echo(f"Error: {e}", err=True)
