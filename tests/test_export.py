@@ -70,3 +70,19 @@ def test_export_unsupported_format_raises(vault_file):
 def test_export_empty_selection_returns_empty_string(vault_file):
     output = export_variables(vault_file, PASSWORD, fmt="dotenv", keys=[])
     assert output == ""
+
+
+def test_export_json_contains_all_keys(vault_file):
+    """Ensure JSON export includes every stored variable when no keys filter is applied."""
+    output = export_variables(vault_file, PASSWORD, fmt="json")
+    data = json.loads(output)
+    assert set(data.keys()) == {"DB_HOST", "DB_PORT", "API_KEY"}
+
+
+def test_export_selective_keys_json(vault_file):
+    """Ensure key filtering works correctly for JSON format."""
+    output = export_variables(vault_file, PASSWORD, fmt="json", keys=["DB_PORT"])
+    data = json.loads(output)
+    assert "DB_PORT" in data
+    assert "DB_HOST" not in data
+    assert "API_KEY" not in data
