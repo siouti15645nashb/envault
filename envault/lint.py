@@ -68,12 +68,25 @@ def _check_duplicate_prefix(keys: List[str]) -> List[LintIssue]:
     return issues
 
 
+def _check_double_underscore(key: str) -> List[LintIssue]:
+    """Warn when a key contains consecutive underscores, which is likely a typo."""
+    if "__" in key:
+        return [LintIssue(
+            key=key,
+            rule="naming",
+            message=f"'{key}' contains consecutive underscores, which may be a typo",
+            severity="warning",
+        )]
+    return []
+
+
 def lint_vault(vault_path: str, password: str) -> List[LintIssue]:
     """Run all lint rules against the vault and return a list of issues."""
     variables = list_variables(vault_path, password)
     issues: List[LintIssue] = []
     for key, value in variables.items():
         issues.extend(_check_naming(key))
+        issues.extend(_check_double_underscore(key))
         issues.extend(_check_empty_value(key, value))
         issues.extend(_check_whitespace(key, value))
     issues.extend(_check_duplicate_prefix(list(variables.keys())))
