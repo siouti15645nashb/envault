@@ -51,6 +51,12 @@ def test_rename_force_nonexistent_key_raises(vault_file):
         rename_variable_force(vault_file, "password", "GHOST", "NEW")
 
 
+def test_rename_to_same_key_raises(vault_file):
+    """Renaming a key to itself should raise a RenameError."""
+    with pytest.raises(RenameError):
+        rename_variable(vault_file, "password", "DB_HOST", "DB_HOST")
+
+
 def test_copy_variable_success(vault_file):
     copy_variable(vault_file, "password", "DB_HOST", "REPLICA_HOST")
     assert get_variable(vault_file, "password", "REPLICA_HOST") == "localhost"
