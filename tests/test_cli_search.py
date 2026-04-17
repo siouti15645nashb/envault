@@ -89,3 +89,13 @@ def test_cmd_find_case_sensitive_no_match(runner, vault_file):
     )
     assert result.exit_code == 0
     assert "No variables matching" in result.output
+
+
+def test_cmd_prefix_case_insensitive_default(runner, vault_file):
+    """Prefix search should match regardless of case by default."""
+    result = runner.invoke(
+        search_group, ["prefix", "app", "--vault", vault_file, "--password", "pass"]
+    )
+    assert result.exit_code == 0
+    assert "APP_DEBUG=true" in result.output
+    assert "DB_HOST" not in result.output
