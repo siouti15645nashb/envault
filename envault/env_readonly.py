@@ -3,7 +3,8 @@
 import json
 from pathlib import Path
 
-READONLY_FILENAME = ".envault_readonly"
+RONLY_FILENAME = ".envault_readonly"
+READONLY_FILENAME = RONLY_FILENAME
 
 
 class ReadonlyError(Exception):
@@ -28,9 +29,6 @@ def _save_readonly(vault_path: str, keys: list) -> None:
 
 def mark_readonly(vault_path: str, key: str) -> None:
     """Mark a variable as read-only."""
-    from envault.vault import list_variables
-    keys = list_variables(vault_path, password="")
-    # just check key exists by loading raw
     from envault.vault import _load_raw
     data = _load_raw(vault_path)
     # key existence will be validated at set-time; we just record it
@@ -43,6 +41,8 @@ def mark_readonly(vault_path: str, key: str) -> None:
 def unmark_readonly(vault_path: str, key: str) -> None:
     """Remove read-only protection from a variable."""
     current = _load_readonly(vault_path)
+    if key not in current:
+        raise ReadonlyError(f"Variable '{key}' is not marked as read-only.")
     current = [k for k in current if k != key]
     _save_readonly(vault_path, current)
 
