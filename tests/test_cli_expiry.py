@@ -35,6 +35,17 @@ def test_expiry_set_invalid_datetime(runner, vault_dir):
     assert result.exit_code != 0
 
 
+def test_expiry_set_updates_existing(runner, vault_dir):
+    """Setting expiry on a key that already has one should update it."""
+    vault = str(vault_dir / ".envault.json")
+    vault_dir_str = str(vault_dir)
+    dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    set_expiry(vault_dir_str, "API_KEY", dt)
+    result = runner.invoke(expiry_group, ["set", "API_KEY", "2026-06-15T12:00:00", "--vault", vault])
+    assert result.exit_code == 0
+    assert "API_KEY" in result.output
+
+
 def test_expiry_remove_success(runner, vault_dir):
     vault = str(vault_dir / ".envault.json")
     vault_dir_str = str(vault_dir)
