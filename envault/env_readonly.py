@@ -19,7 +19,10 @@ def _load_readonly(vault_path: str) -> list:
     p = _readonly_path(vault_path)
     if not p.exists():
         return []
-    return json.loads(p.read_text())
+    try:
+        return json.loads(p.read_text())
+    except json.JSONDecodeError as e:
+        raise ReadonlyError(f"Corrupted read-only file at '{p}': {e}") from e
 
 
 def _save_readonly(vault_path: str, keys: list) -> None:
