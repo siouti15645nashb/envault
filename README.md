@@ -39,6 +39,12 @@ Load variables into your shell session:
 eval $(envault load)
 ```
 
+Remove a stored variable:
+
+```bash
+envault unset DATABASE_URL
+```
+
 Export an encrypted vault file to share with your team:
 
 ```bash
